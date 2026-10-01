@@ -1,0 +1,5 @@
+upstream: https://github.com/cktan/tomlc17
+tag: R260821 (main, 4 commits after)
+commit: 8d3766ddafa6515417f4885ae6878ef69fac401e
+files: src/tomlc17.c src/tomlc17.h LICENSE (unmodified)
+corpus: https://github.com/toml-lang/toml-test ff49d109861c1ad25af53f687f2aef19ab650600

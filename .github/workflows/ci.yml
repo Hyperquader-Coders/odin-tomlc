@@ -1,0 +1,29 @@
+# Build the vendored C, type-check, run the unit tests, then byte-compare the
+# ported toml-test driver against upstream's across the official corpus.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Empty version follows amber-odin's monthly release; pin it for a
+      # reproducible build.
+      - uses: Hyperquader-Coders/setup-amber-odin@v1
+
+      - name: odin check
+        run: make check
+
+      - name: unit tests
+        run: make test-unit
+
+      - name: toml-test corpus vs upstream driver
+        run: make test-spec

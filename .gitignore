@@ -1,0 +1,16 @@
+# Build outputs
+/build/
+/dist/
+/out/
+*.o
+*.obj
+*.a
+*.exe
+
+# Agent files are local and are not shared.
+.claude/
+.mcp.json
+
+# Claude config dirs, if a session ever materialises one here.
+.claude-amber/
+.credentials.json
