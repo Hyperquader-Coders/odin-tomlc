@@ -1,0 +1,26 @@
+# MoSCoW — odin-tomlc
+
+Prioritisation by **Must / Should / Could / Won't have** (the lower-case Os just make it
+pronounceable). This is the **scope** document, and it holds only what is **still open**: an
+item leaves this file the moment it ships. Nothing here records work done — `git log` is for
+that.
+
+An empty band means that band is finished, not that it was never populated.
+
+## Must have
+
+- nada
+
+## Should have
+
+- nada
+
+## Could have
+
+- nada
+
+## Won't have (this time)
+
+- Further work. The repository is not maintained; the Amber projects use amber-toml.
+- A serialiser. Upstream has none.
+- Reflection-based `unmarshal`.
