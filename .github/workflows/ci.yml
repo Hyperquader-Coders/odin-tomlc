@@ -1,0 +1,36 @@
+# `make ci` is the whole gate: it builds the vendored C, type-checks, runs the unit tests, then
+# byte-compares the ported toml-test driver against upstream's across the official corpus.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The jobs only read the repository.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The Makefile finds the Amber tree in AMBER_ROOT; here the workspace is that tree.
+    env:
+      AMBER_ROOT: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Empty version follows amber-odin's monthly release; pin it for a
+      # reproducible build. ols: odinfmt comes with it, so make ci's check-fmt runs here.
+      - uses: Hyperquader-Coders/setup-amber-odin@v1
+        with:
+          ols: true
+
+      # The packages are the Makefile's DEPS list.
+      - name: system packages
+        run: sudo apt-get update && make init-packages APT_FLAGS=-y
+
+      - name: make ci
+        run: make ci
