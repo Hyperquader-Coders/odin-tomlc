@@ -1,0 +1,169 @@
+extends "lib:kinds/odin-lib.ela"
+follows "lib:kinds/build.elah"
+
+# What odin-tomlc is and needs: BUILD_PACKAGES is what a program on it needs, TEST_PACKAGES what
+# only its own tests and checks need.
+@(override)
+NAME :: "odin-tomlc"
+
+@(override)
+LICENSE :: "MIT"
+
+@(override)
+VERSION :: "0.1.0"
+
+@(override)
+SUMMARY :: "Odin bindings for tomlc17, kept for reference; amber-toml supersedes them"
+
+@(override)
+TAGS :: ["ai-assisted", "bindings", "odin", "toml"]
+
+@(override)
+COLLECTION :: "tomlc"
+
+@(override)
+SOURCES :: {
+    "HOUSE_ROOT": {"project-templates": "https://github.com/Hyperquader-Coders/project-templates"},
+}
+
+@(override)
+LIB_DIRS :: ["tomlc"]
+
+@(override)
+BUILD_PACKAGES :: ["gcc", "libc6-dev"]
+
+@(override)
+TEST_PACKAGES :: ["curl"]
+
+# The C it binds is vendored unmodified in vendor/tomlc17 and built here into the static library
+# the package links, by its foreign import. The reference the tests grade against is tomlc17's own
+# toml-test driver, built from the vendored commit, and the corpus is one commit of toml-test;
+# vendor/tomlc17/VERSION pins both.
+
+# The static library tomlc/tomlc.odin links, and the object it is archived from.
+LIB :: "vendor/tomlc17/libtomlc17.a"
+LIB_OBJECT :: "vendor/tomlc17/tomlc17.o"
+
+# The vendored C the library is compiled from.
+LIB_SOURCES :: ["vendor/tomlc17/tomlc17.c", "vendor/tomlc17/tomlc17.h"]
+
+# The file that pins the vendored commit and the corpus commit.
+VERSION_FILE :: "vendor/tomlc17/VERSION"
+
+# The C compiler's flags for the library; CFLAGS= on the runner's command line replaces them.
+CFLAGS :: ["-O2", "-Wall", "-std=c17"]
+
+# The port of upstream's toml-test driver, built from examples/tomltest.
+TOMLTEST :: "build/tomltest"
+
+# Where the reference driver's source and the corpus are fetched to.
+UPSTREAM :: "build/upstream"
+CORPUS :: "build/toml-test"
+
+# The library and the example driver, then the kind's checks.
+@(override)
+proc check()
+    lib()
+    examples()
+    parent.check()
+end proc
+
+# The library, the corpus diff against upstream's driver, then the kind's tests; under ASan the
+# library and the kind's tests alone.
+@(override)
+proc test()
+    lib()
+    if not asan()
+        test_spec()
+    end if
+    parent.test()
+end proc
+
+# The kind's clean, and the compiled library in vendor/.
+@(override)
+proc clean()
+    parent.clean()
+    clean_lib()
+end proc
+
+# The C compiler: CC from the command line or the environment, else cc.
+proc c_compiler() -> string
+    return given("CC", "cc")
+end proc
+
+# Compile vendor/tomlc17 into libtomlc17.a, rebuilt when its C changes.
+proc lib()
+    if not stale($LIB, $LIB_SOURCES)
+        return
+    end if
+    cc = c_compiler()
+    cflags = given_list("CFLAGS", $CFLAGS)
+    $cc $cflags -c vendor/tomlc17/tomlc17.c -o $LIB_OBJECT
+    ar rcs $LIB $LIB_OBJECT
+end proc
+
+# Remove the compiled library and its object.
+proc clean_lib()
+    remove($LIB_OBJECT, $LIB)
+end proc
+
+# Build the tomltest example driver, rebuilt when its sources, the package's or the pins change.
+proc examples()
+    lib()
+    sources = list.append(path.glob("examples/tomltest/*.odin"), ..path.glob("tomlc/*.odin"))
+    sources = list.append($sources, $LIB, $VERSION_FILE)
+    if not stale($TOMLTEST, $sources)
+        return
+    end if
+    dir.create("build")
+    odin = odin_program()
+    flags = collections("")
+    $odin build examples/tomltest $flags $ODIN_FLAGS "-out:$TOMLTEST" -o:speed
+end proc
+
+# Byte-identical output and exit code against upstream's own toml-test driver, over every file the
+# official corpus lists for TOML 1.1. Both run the same C, so a difference is the bindings'.
+proc test_spec()
+    examples()
+    references()
+    python3 test/spec-diff.py $UPSTREAM/driver $TOMLTEST $CORPUS/tests
+end proc
+
+# A pin of vendor/tomlc17/VERSION: the value after `<key>: `, its last word.
+proc pinned(key: string) -> string
+    for line in str.lines(file.read($VERSION_FILE))
+        if str.starts_with($line, "$key: ")
+            words = str.fields(str.trim_prefix($line, "$key: "))
+            return $words[len($words) - 1]
+        end if
+    end for
+    fail "$VERSION_FILE pins no $key"
+end proc
+
+# tomlc17's driver and the corpus, each GitHub's archive of its pinned commit, fetched once. The
+# reference driver is built from upstream's source of the vendored commit, which is the whole
+# premise of the comparison; it #includes tomlc17.c itself, built without its sanitizer flags,
+# which change nothing it prints.
+proc references()
+    commit = pinned("commit")
+    fetch($UPSTREAM, "https://github.com/cktan/tomlc17", $commit)
+    if stale("$UPSTREAM/driver", ["$UPSTREAM/.at-$commit"])
+        cc = c_compiler()
+        $cc -O2 -std=c17 -I$UPSTREAM/src $UPSTREAM/test/stdtest/parser.c -o $UPSTREAM/driver
+    end if
+    fetch($CORPUS, "https://github.com/toml-lang/toml-test", pinned("corpus"))
+end proc
+
+# GitHub's archive of url at commit, unpacked into to: the stamp, not the folder, says a fetch is
+# done, as one that failed leaves the folder.
+proc fetch(to: string, url: string, commit: string)
+    if file.exists("$to/.at-$commit")
+        return
+    end if
+    rm -rf $to
+    dir.create($to)
+    curl -fsSL -o ${to}.tar.gz $url/archive/${commit}.tar.gz
+    tar -xzf ${to}.tar.gz --strip-components=1 -C $to
+    rm -f ${to}.tar.gz
+    touch $to/.at-$commit
+end proc
